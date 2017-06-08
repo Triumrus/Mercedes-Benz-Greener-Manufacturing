@@ -24,6 +24,8 @@ https://www.kaggle.com/c/mercedes-benz-greener-manufacturing
   2.7) EM algorim
   2.8) Иеархическая кластеризация
   2.9) ARIMA
+  
 3) Построения ансамбля на всех моделей из пункта 2 линейной регрессии.
+
 4) Тестить через бустрап
   
