@@ -84,4 +84,26 @@ data$X8 <- NULL
 
 data<- apply(data,2,function(x){ as.numeric(x)})
 data <- data.table(data)
+# fwrite(data,"data.csv")
 
+data$chetnoe <- data$ID%%2
+
+cormatrix<- t(cor(data$y[1:4209],data[1:4209,-2]))
+cormatrix <- data.table(cormatrix)
+cormatrix<- cormatrix[order(V1)]
+
+
+data$ID <- NULL
+
+
+hetero_test <-  function(test_data){
+  y<- test_data[,1]
+  test_data[,1] <- NULL
+  fit<-  lm(y~.,test_data)
+  R2<- lm(fit$residuals^2~.,test_data)
+  return(summary(R2)$r.squared)
+  
+  
+}
+
+hetero_test(data[1:4209,])
