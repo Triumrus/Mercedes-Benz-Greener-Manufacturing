@@ -94,16 +94,43 @@ cormatrix<- cormatrix[order(V1)]
 
 
 data$ID <- NULL
+a<- apply(data[1:4209,],2,function(x){
+  sum(x,na.rm = T) == (4209 | 0)
+  
+})
+
+data <- as.data.frame(data)
+data<- data[,-which(a)]
+data <- data.table(data)
+
+train_m <- data[1:4209,]
+test_m <- data[4210:8418,]
 
 
 hetero_test <-  function(test_data){
   y<- test_data[,1]
+  y <- unlist(y)
   test_data[,1] <- NULL
   fit<-  lm(y~.,test_data)
   R2<- lm(fit$residuals^2~.,test_data)
   return(summary(R2)$r.squared)
-  
-  
+
+
 }
 
-hetero_test(data[1:4209,])
+hetero_test(train_m)
+
+train_m <- as.data.frame(train_m)
+
+smart_model <- function(data)
+{
+  a<-   sapply(names(data[-1]), function(name) {
+    m = lm(as.formula(paste(name, "~ .")), data[-1])
+    r2 = summary(m)$r.squared
+    1 / (1 - r2)
+    
+  })
+  if (a[which.max(a)]>10) (data <- smart_model(data[,-(which.max(a)+1)])) else ( lm(as.formula(paste(names(data[1]), "~ .")), data) )
+}
+
+model<- smart_model(train_m)
