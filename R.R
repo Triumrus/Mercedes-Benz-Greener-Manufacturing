@@ -97,7 +97,7 @@ cormatrix <- data.table(cormatrix)
 cormatrix<- cormatrix[order(V1)]
 
 
-# data$ID <- NULL
+data$ID <- NULL
 a<- apply(data[1:4209,],2,function(x){
   sum(x,na.rm = T) == (4209 | 0)
   
