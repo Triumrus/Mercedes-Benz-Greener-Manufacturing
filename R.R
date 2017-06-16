@@ -1,4 +1,8 @@
 library(data.table)
+
+
+###### СОЗДАНИЕ ВЫБОРКИ
+######
 setwd("C:/Users/user/Desktop/саша/kagle")
 getwd()
 test<- fread("test.csv")
@@ -13,7 +17,7 @@ data$X4 <- as.factor(data$X4)
 data$X5 <- as.factor(data$X5)
 data$X6<- as.factor(data$X6)
 data$X8 <- as.factor(data$X8)
-str(data)
+# str(data)
 
 
 
@@ -93,7 +97,7 @@ cormatrix <- data.table(cormatrix)
 cormatrix<- cormatrix[order(V1)]
 
 
-data$ID <- NULL
+# data$ID <- NULL
 a<- apply(data[1:4209,],2,function(x){
   sum(x,na.rm = T) == (4209 | 0)
   
@@ -102,6 +106,22 @@ a<- apply(data[1:4209,],2,function(x){
 data <- as.data.frame(data)
 data<- data[,-which(a)]
 data <- data.table(data)
+
+
+
+
+
+
+
+
+######  Построение модели
+######
+
+
+
+
+
+
 
 train_m <- data[1:4209,]
 test_m <- data[4210:8418,]
@@ -114,8 +134,8 @@ hetero_test <-  function(test_data){
   fit<-  lm(y~.,test_data)
   R2<- lm(fit$residuals^2~.,test_data)
   return(summary(R2)$r.squared)
-
-
+  
+  
 }
 
 hetero_test(train_m)
@@ -130,6 +150,7 @@ smart_model <- function(data)
     1 / (1 - r2)
     
   })
+  print(length(a))
   if (a[which.max(a)]>10) (data <- smart_model(data[,-(which.max(a)+1)])) else ( lm(as.formula(paste(names(data[1]), "~ .")), data) )
 }
 
