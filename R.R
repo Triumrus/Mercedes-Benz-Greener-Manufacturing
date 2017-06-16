@@ -155,3 +155,5 @@ smart_model <- function(data)
 }
 
 model<- smart_model(train_m)
+save(model, file = "model.rda")
+load("model.rda")
