@@ -92,9 +92,7 @@ data <- data.table(data)
 
 data$chetnoe <- data$ID%%2
 
-cormatrix<- t(cor(data$y[1:4209],data[1:4209,-2]))
-cormatrix <- data.table(cormatrix)
-cormatrix<- cormatrix[order(V1)]
+
 
 
 data$ID <- NULL
@@ -106,7 +104,114 @@ a<- apply(data[1:4209,],2,function(x){
 data <- as.data.frame(data)
 data<- data[,-which(a)]
 data <- data.table(data)
+y<- data$y
+data$y <- NULL
+is_multicol <- function(data){
+  
+    d<- data
+    d <- abs(cor(d))     
+  d[lower.tri(d)] <- 0    
+  diag(d) <- 0    
+  index <- which((1-d) < 1e-10, arr.ind = T)    
+  print(length(index))
+  if (length(index) == 0){      
+    return(data)
+    print('There is no collinearity in the data')
+    
+  } else {      
+   
+    data<- subset(data,select = -index[1,2])
+    is_multicol(data)
+    
+  }      
 
+  # data$y
+  
+  }
+
+
+
+data<- is_multicol(data)
+data$y <- y
+
+# PCA
+
+get_pca2 <- function(test_data){    
+  fit <- prcomp(test_data)    
+  cum_prop <- summary(fit)$importance['Cumulative Proportion',]    
+  test_data <- cbind(test_data, fit$x[,1:min(which(cum_prop>0.9))])    
+  return(test_data)    
+}
+
+data<- cbind(data$y,get_pca2(subset(data,select = -y)))
+
+names(data)[1] <- "y"
+
+# K  - means 
+# 14 Кластеров
+# Запсук расчет для определения
+
+# for(i in 1:100){
+#   irisCluster <- kmeans(data[,-1], i, nstart = 100)
+#   kluster[i] <- sum(irisCluster$withinss)
+# }
+# 
+# plot(kluster)
+# plot(kluster/c(kluster[2:100],kluster[100]))
+# save(irisCluster,file="irisCluster.rda")
+
+
+
+# Построе кластера
+
+k_cluster <- kmeans(data[,-1], 14, nstart = 100)
+data$cluster <-  k_cluster$cluster
+plot(y=data$y,x=data$cluster)
+data <- data.table(data)
+# nrow(data[y<=(IQR(data$y,na.rm = T)*1.5+quantile(x = data$y,probs = 0.75,na.rm = T))])
+
+# Добавление фич PCA в полиноме
+transform_x = function(data)
+{
+  do_transform = function(x, lambd) {
+    if (lambd > 0) x ^ lambd else if (lambd < 0) -(x ^ lambd) else log(x) }
+  
+  x_data = data[,2]
+  y_data = data[,1]
+  lambdas = seq(-5, 5, 0.1)
+  corrs = sapply(lambdas, 
+                 function(lambd) cor(do_transform(x_data, lambd), y_data))
+  lambda = lambdas[which.max(abs(corrs))]
+  return(lambda)
+}
+
+
+nc<- ncol(data)
+for(i in min(grep("PC1",names(data))):(nc-1)) {print(i)
+  data <- cbind(data,
+                subset(data,select = i)^transform_x(subset(data[1:4209,],select = c(1,i)))
+  )
+  names(data)[ncol(data)] <- paste0(names(data)[i],"_",transform_x(subset(data[1:4209,],select = c(1,i))))
+}
+
+# BOOSTRAP
+
+a<- sample(4209,6000,replace = T)
+
+boot<- train_m[a,]
+lm_boot<- lm(y~.,boot)
+summary(lm_boot)
+train_m_boot <- train_m[-unique(a),]
+
+train_m_boot$y_pred<- predict(lm_boot,train_m_boot[,-1])
+boot$y_pred<- predict(lm_boot,boot[,-1])
+
+
+
+
+sum((train_m_boot$y_pred-mean(train_m_boot$y))^2)/sum((train_m_boot$y-mean(train_m_boot$y))^2)
+R<- sum((boot$y_pred-mean(boot$y))^2)/sum((boot$y-mean(boot$y))^2)
+R
 
 
 
@@ -157,3 +262,10 @@ smart_model <- function(data)
 model<- smart_model(train_m)
 save(model, file = "model.rda")
 load("model.rda")
+
+# предсказаине
+
+test$y<- predict(lm_boot,test_m[,-1])
+
+test[,c(1,378)]
+fwrite(test[,c(1,378)],"kaggle_8.csv")
