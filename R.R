@@ -194,58 +194,48 @@ for(i in min(grep("PC1",names(data))):(nc-1)) {print(i)
   names(data)[ncol(data)] <- paste0(names(data)[i],"_",transform_x(subset(data[1:4209,],select = c(1,i))))
 }
 
+
+# fwrite(data,"data.csv")
+
+######
+
+#Разделение выборки
+#####
+
+# train/test
+# test<- data[which(is.na(data$y)),]
+# train<- data[!which(is.na(data$y)),]
+train <- data[1:4209]
+test <- data[4210:8418]
+
+# cross validation
+
+library(xgboost)
+train_2 <- train
+y<- train_2$y
+train_2$y <- NULL
+y<- unlist(y)
+dtrain <- xgb.DMatrix(as.matrix(train_2),label=y)
+cv <- xgb.cv(data = dtrain, nrounds = 10, nthread = 2, nfold = 5, metrics = list("rmse"),
+             max_depth = 3, eta = 1)
+print(cv)
+cv$folds
+
 # BOOSTRAP
+set.seed(777)
+a<- sample(4209,4209,replace = T)
 
-a<- sample(4209,6000,replace = T)
+boot<- train[a,]
 
-boot<- train_m[a,]
-lm_boot<- lm(y~.,boot)
-summary(lm_boot)
-train_m_boot <- train_m[-unique(a),]
+summary(boot$y)
+boot_test <- train[-unique(a),]
+summary(boot_test$y)
 
-train_m_boot$y_pred<- predict(lm_boot,train_m_boot[,-1])
-boot$y_pred<- predict(lm_boot,boot[,-1])
-
-
-
-
-sum((train_m_boot$y_pred-mean(train_m_boot$y))^2)/sum((train_m_boot$y-mean(train_m_boot$y))^2)
-R<- sum((boot$y_pred-mean(boot$y))^2)/sum((boot$y-mean(boot$y))^2)
-R
-
-
-
-
-
-
+#####
 
 ######  Построение модели
 ######
 
-
-
-
-
-
-
-train_m <- data[1:4209,]
-test_m <- data[4210:8418,]
-
-
-hetero_test <-  function(test_data){
-  y<- test_data[,1]
-  y <- unlist(y)
-  test_data[,1] <- NULL
-  fit<-  lm(y~.,test_data)
-  R2<- lm(fit$residuals^2~.,test_data)
-  return(summary(R2)$r.squared)
-  
-  
-}
-
-hetero_test(train_m)
-
-train_m <- as.data.frame(train_m)
 
 smart_model <- function(data)
 {
@@ -259,13 +249,77 @@ smart_model <- function(data)
   if (a[which.max(a)]>10) (data <- smart_model(data[,-(which.max(a)+1)])) else ( lm(as.formula(paste(names(data[1]), "~ .")), data) )
 }
 
-model<- smart_model(train_m)
-save(model, file = "model.rda")
-load("model.rda")
+model_smart<- smart_model(train_m)
+save(model_smart, file = "model_smart.rda")
+load("model_smart.rda")
 
+
+
+trainLabel <-  boot$y
+testlabel <- boot_test$y
+boot$y <-  NULL
+boot_test$y <-  NULL
+# rm(data)
+
+
+dtrain = xgb.DMatrix(data=data.matrix(boot),label=trainLabel,missing = NaN)
+dtest = xgb.DMatrix(data=data.matrix(boot_test),label=testlabel,missing = NaN)
+
+watchlist<-list(test=dtest,train=dtrain)
+evalerror <- function(preds, dtrain) {
+  labels <- getinfo(dtrain, "label")
+  err <-sum((preds-mean(labels))^2)/sum((labels-mean(labels))^2)
+  return(list(metric = "R2", value = err))
+}
+
+
+param <- list(  objective           = "reg:linear",
+                booster = "gbtree",
+                eval_metric = evalerror,
+                eta                 = 0.2, # 0.06, #0.01,
+                max_depth           = 6, #changed from default of 8
+                subsample           = 0.7, # 0.7
+                colsample_bytree    = 0.77 # 0.7
+                # num_parallel_tree   = 2
+                # alpha = 0.0001,
+                # lambda = 1
+                # lambda_bias = 1
+)
+set.seed(777)
+clf2 <- xgb.train(   params              = param,
+                     data                = dtrain,
+                     nrounds             = 500,
+                     verbose             = 1,
+                     # early.stop.round    = 50,
+                     #feval = normalizedGini,
+                     watchlist           = watchlist,
+                     maximize            = T
+                     
+)
+
+
+
+which(clf2$evaluation_log$test_R2==max(subset(clf2$evaluation_log,test_R2<1,select = test_R2)$test_R2))
+which(clf2$evaluation_log$test_R2==max(subset(clf2$evaluation_log,test_R2<0.79,select = test_R2)$test_R2))
+
+
+
+train$pred_y<- predict(clf2,data.matrix(train[,-1]),ntreelimit = which(clf2$evaluation_log$test_R2==max(subset(clf2$evaluation_log,test_R2<0.79,select = test_R2)$test_R2)))
+
+############
+  
 # предсказаине
+########### 
+test_zaliv<- fread("test.csv")
+
+# pred_xgboots
+test_zaliv$y<- predict(clf2,data.matrix(test[,-1]),ntreelimit = which(clf2$evaluation_log$test_R2==max(subset(clf2$evaluation_log,test_R2<0.79,select = test_R2)$test_R2)))
+test_zaliv<- test_zaliv[,.(ID,y)]
 
 test$y<- predict(lm_boot,test_m[,-1])
 
-test[,c(1,378)]
-fwrite(test[,c(1,378)],"kaggle_8.csv")
+
+fwrite(test_zaliv,"kaggle_9.csv")
+
+
+
